@@ -7,8 +7,8 @@ import (
 	"net/http"
 
 	"github.com/MaxGot69/url-shortener/internal/config"
+	"github.com/MaxGot69/url-shortener/internal/models"
 	"github.com/MaxGot69/url-shortener/internal/server"
-	"github.com/MaxGot69/url-shortener/models"
 	"github.com/MaxGot69/url-shortener/pkg/database"
 )
 
