@@ -4,10 +4,20 @@ import (
 	"crypto/rand"
 	"math/big"
 	"net/url"
+
+	"github.com/MaxGot69/url-shortener/internal/repository"
 )
 
+type URLService struct {
+	repo repository.URLRepository
+}
+
+func NewURLService(repo repository.URLRepository) *URLService {
+	return &URLService{repo: repo}
+}
+
 // Генерация случайной строки для короткой ссылки
-func GenerateRandomShortString(n int) (string, error) {
+func (s *URLService) GenerateRandomShortString(n int) (string, error) {
 	const letters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-"
 	ret := make([]byte, n)
 	for i := 0; i < n; i++ {
@@ -21,7 +31,7 @@ func GenerateRandomShortString(n int) (string, error) {
 }
 
 // функция для валидации url
-func IsValidURL(u string) bool {
+func (s *URLService) IsValidURL(u string) bool {
 	parseURL, err := url.Parse(u) // парсим строку в url
 	if err != nil {
 		return false // ошибка - неваллидный url
