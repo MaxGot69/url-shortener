@@ -5,8 +5,21 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/MaxGot69/url-shortener/pkg/cache"
 	"github.com/go-chi/chi/v5"
 )
+
+var RedisClient *cache.RedisClient
+
+func init() {
+	var err error
+	RedisClient, err = cache.NewRedisClient("localhost:6379", "", 0)
+	if err != nil {
+		log.Printf("Redis connection failed: %v", err)
+	} else {
+		log.Println("Redis client initialized")
+	}
+}
 
 // Get обработчик
 func RedirectHandler(w http.ResponseWriter, r *http.Request) {
