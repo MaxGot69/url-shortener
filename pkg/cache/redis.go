@@ -34,3 +34,8 @@ func (r *RedisClient) Get(key string) (string, error) {
 func (r *RedisClient) Set(key, value string, ttl time.Duration) error {
 	return r.client.Set(ctx, key, value, ttl).Err()
 }
+
+// TODO:Удаление
+func (r *RedisClient) Delete(key string) error {
+	return r.client.Del(ctx, key).Err()
+}

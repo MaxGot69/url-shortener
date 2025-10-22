@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
@@ -45,6 +46,11 @@ func PostHandler(service *service.URLService) http.HandlerFunc {
 				CreatedAt:   time.Now(),
 				ExpiresAt:   time.Now().Add(24 * time.Hour),
 				ClickCount:  0,
+			}
+			// Сохранение в кеше Redis
+			err = RedisClient.Set(shortCode, req.OrginalURL, 24*time.Hour)
+			if err != nil {
+				log.Printf("Failed to cache newUrl in Redis: %v", err)
 			}
 
 			response := map[string]string{

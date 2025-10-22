@@ -24,19 +24,37 @@ func init() {
 // Get обработчик
 func RedirectHandler(w http.ResponseWriter, r *http.Request) {
 	shortCode := chi.URLParam(r, "shortCode") // Получаем короткую из url
-	// Достаем url из urlMap
+
+	//Проверка кеш Redis
+	cacheURL, err := RedisClient.Get(shortCode)
+	if err == nil && cacheURL != "" {
+		//Находим в кеше
+		http.Redirect(w, r, cacheURL, http.StatusFound)
+		log.Printf("Redis cache hit: %s -> %s", shortCode, cacheURL)
+		return
+	}
+
+	// ЕСли нет в кеше то ищем  БД/urlMap
 	url, ok := urlMap[shortCode]
 	if !ok {
-		http.Error(w, "Short URL not found", http.StatusFound) // если нету то 404
+		http.Error(w, "Short URL not found", http.StatusNotFound) // если нету то 404
+		return
 	}
 	// Проверяем не истек ли срок действия ссылки
 	if time.Now().After(url.ExpiresAt) {
 		http.Error(w, "Short URL has expired", http.StatusGone) // 410
-		// Увеличиваем счетчик кликов
-		url.ClickCount++
-		urlMap[shortCode] = url
+		return
 	}
-	http.Redirect(w, r, url.OriginalURL, http.StatusFound) // Перенаправлем на оригинальную ссылку
+	//Сохраняем в редис на 24 часа
+	err = RedisClient.Set(shortCode, url.OriginalURL, 24*time.Hour)
+	if err != nil {
+		log.Printf("Failed to cache in Redis: %v", err)
+	}
+
+	http.Redirect(w, r, url.OriginalURL, http.StatusFound)
+	// Увеличиваем счетчик кликов
+	url.ClickCount++
+	urlMap[shortCode] = url // Перенаправлем на оригинальную ссылку
 	log.Printf("Redirected %s to %s", url.ShortCode, url.OriginalURL)
 
 }
