@@ -4,13 +4,16 @@ import (
 	"net/http"
 
 	"github.com/MaxGot69/url-shortener/internal/handler"
+	myMiddleware "github.com/MaxGot69/url-shortener/internal/middleware"
+	"github.com/MaxGot69/url-shortener/internal/repository"
 	"github.com/MaxGot69/url-shortener/internal/service"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 )
 
-func NewRouter(urlService *service.URLService) *chi.Mux {
+func NewRouter(urlService *service.URLService, userRepo repository.UserReposytory) *chi.Mux {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger) //автоматически логирует информацию о каждом HTTP-запросе
 	r.Use(middleware.Recoverer)
@@ -28,7 +31,10 @@ func NewRouter(urlService *service.URLService) *chi.Mux {
 	r.Get("/health", healthHeandler)
 	r.Route("/api/v1/", func(r chi.Router) {
 		r.Post("/shorten", handler.PostHandler(urlService)) // Обработчик POST запросов для сокращения url (из handler/shorten.go)
+		r.Post("/api/v1/register", handler.RegisterHandler) // User
+		r.Post("/api/v1/login", handler.LoginHandler)       //User
 	})
+	r.With(myMiddleware.AuthMiddleware).Get("/api/v1/stats/{shortCode}", handler.StatisticHandler)
 
 	return r
 
