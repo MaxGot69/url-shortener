@@ -25,7 +25,9 @@ func main() {
 	repo := &repository.PostgresRepository{DB: db}
 	urlService := service.NewURLService(repo) //  создаём сервис
 
-	router := server.NewRouter(urlService) // передаём его в NewRouter
+	userRepo := repo
+
+	router := server.NewRouter(urlService, userRepo) // передаём его в NewRouter
 
 	fmt.Println("Starting server on port", cfg.Port)
 	log.Fatal(http.ListenAndServe(":"+cfg.Port, router))
