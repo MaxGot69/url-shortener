@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/MaxGot69/url-shortener/internal/metrics"
 	"github.com/MaxGot69/url-shortener/pkg/cache"
 	"github.com/go-chi/chi/v5"
 )
@@ -23,6 +24,7 @@ func init() {
 
 // Get обработчик
 func RedirectHandler(w http.ResponseWriter, r *http.Request) {
+	metrics.URLRedirectsTotal.Inc()           // Метрики
 	shortCode := chi.URLParam(r, "shortCode") // Получаем короткую из url
 
 	//Проверка кеш Redis
