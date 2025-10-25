@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/MaxGot69/url-shortener/internal/metrics"
 	"github.com/MaxGot69/url-shortener/internal/models"
 	"github.com/MaxGot69/url-shortener/internal/service"
 )
@@ -20,6 +21,7 @@ var urlMap = make(map[string]models.URL)
 // Оюработчик POST
 func PostHandler(service *service.URLService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		metrics.URLShortensTotal.Inc()
 		if r.Method == "POST" {
 			var req URL
 

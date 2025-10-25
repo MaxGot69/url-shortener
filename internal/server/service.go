@@ -7,6 +7,7 @@ import (
 	myMiddleware "github.com/MaxGot69/url-shortener/internal/middleware"
 	"github.com/MaxGot69/url-shortener/internal/repository"
 	"github.com/MaxGot69/url-shortener/internal/service"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -35,6 +36,8 @@ func NewRouter(urlService *service.URLService, userRepo repository.UserReposytor
 		r.Post("/api/v1/login", handler.LoginHandler)       //User
 	})
 	r.With(myMiddleware.AuthMiddleware).Get("/api/v1/stats/{shortCode}", handler.StatisticHandler)
+
+	r.Handle("/metrics", promhttp.Handler())
 
 	return r
 

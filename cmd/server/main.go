@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/MaxGot69/url-shortener/internal/config"
+	"github.com/MaxGot69/url-shortener/internal/metrics"
 	"github.com/MaxGot69/url-shortener/internal/models"
 	"github.com/MaxGot69/url-shortener/internal/repository"
 	"github.com/MaxGot69/url-shortener/internal/server"
@@ -15,6 +16,7 @@ import (
 )
 
 func main() {
+	metrics.Init()
 	cfg := config.LoadConfig()
 
 	db, err := database.PostgresConnection()
