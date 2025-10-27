@@ -7,7 +7,7 @@ import (
 	"gorm.io/gorm"
 )
 
-type UserReposytory interface {
+type UserRepository interface {
 	FindByEmail(email string) (*models.User, error)
 	CreateUser(user *models.User) error
 }

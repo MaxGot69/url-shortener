@@ -8,6 +8,7 @@ import (
 type URLRepository interface {
 	SaveURL(url models.URL) error
 	GetURLByShortCode(shortCode string) (*models.URL, error)
+	UpdateClickCount(url models.URL) error
 }
 
 type PostgresRepository struct {
@@ -16,7 +17,6 @@ type PostgresRepository struct {
 
 func (r *PostgresRepository) SaveURL(url models.URL) error {
 	return r.DB.Create(&url).Error
-
 }
 
 func (r *PostgresRepository) GetURLByShortCode(shortCode string) (*models.URL, error) {
@@ -25,4 +25,8 @@ func (r *PostgresRepository) GetURLByShortCode(shortCode string) (*models.URL, e
 		return nil, err
 	}
 	return &url, nil
+}
+
+func (r *PostgresRepository) UpdateClickCount(url models.URL) error {
+	return r.DB.Model(&url).Update("click_count", url.ClickCount).Error
 }

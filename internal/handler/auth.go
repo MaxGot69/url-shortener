@@ -2,15 +2,16 @@ package handler
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/MaxGot69/url-shortener/internal/config"
 	"github.com/MaxGot69/url-shortener/internal/models"
 	"github.com/MaxGot69/url-shortener/internal/repository"
 	"github.com/go-chi/chi/v5"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
+	appLogger "github.com/MaxGot69/url-shortener/pkg/logger"
 )
 
 type RegisterRequest struct {
@@ -28,118 +29,159 @@ type AuthResponse struct {
 	UserID string `json:"user_id"`
 }
 
-var secretKey = []byte("your-secret-key")
-var userRepo repository.UserReposytory
-var repo repository.PostgresRepository
+type RegisterHandler struct {
+	repo      repository.UserRepository
+	jwtSecret string
+}
 
-func RegisterHandler(w http.ResponseWriter, r *http.Request) {
-	// 1. Декодировать JSON из тела запроса
+func NewRegisterHandler(repo repository.UserRepository, cfg *config.Config) *RegisterHandler {
+	return &RegisterHandler{
+		repo:      repo,
+		jwtSecret: cfg.JWTSecret,
+	}
+}
+
+func (h *RegisterHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var req RegisterRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		appLogger.Logger.Error("Failed to decode register request", "error", err)
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
-	fmt.Printf("Email: %s, Password: %s\n", req.Email, req.Password)
 
-	// 2. Проверить есть ли пользователь в БД
-	checkUser, err := userRepo.FindByEmail(req.Email)
+	appLogger.Logger.Info("Registration attempt", "email", req.Email)
+
+	checkUser, err := h.repo.FindByEmail(req.Email)
 	if err == nil && checkUser != nil {
+		appLogger.Logger.Warn("User already exists", "email", req.Email)
 		http.Error(w, "User already exists", http.StatusConflict)
 		return
 	}
 
-	// 3. Захешировать пароль с bcrypt
 	passwordBytes := []byte(req.Password)
 	hash, err := bcrypt.GenerateFromPassword(passwordBytes, bcrypt.DefaultCost)
 	if err != nil {
+		appLogger.Logger.Error("Failed to hash password", "error", err)
 		http.Error(w, "Error hashing password", http.StatusInternalServerError)
 		return
 	}
 
-	fmt.Printf("Hashing password: %s\n", string(hash))
-
-	// 4. Сохранить пользователя в БД
 	newUser := &models.User{
 		Email:        req.Email,
 		PasswordHash: string(hash),
 		CreatedAt:    time.Now(),
 	}
-	err = userRepo.CreateUser(newUser)
+
+	err = h.repo.CreateUser(newUser)
 	if err != nil {
+		appLogger.Logger.Error("Failed to create user", "error", err)
 		http.Error(w, "Error creating user", http.StatusInternalServerError)
 		return
 	}
 
-	// 5. Вернуть HTTP 201 Created
 	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(map[string]string{
+	json.NewEncoder(w).Encode(map[string]string{
 		"message": "User registered successfully",
 	})
 
+	appLogger.Logger.Info("User registered", "email", req.Email, "user_id", newUser.ID)
 }
 
-func LoginHandler(w http.ResponseWriter, r *http.Request) {
-	// 1. Декодировать JSON
+type LoginHandler struct {
+	repo      repository.UserRepository
+	jwtSecret string
+}
+
+func NewLoginHandler(repo repository.UserRepository, cfg *config.Config) *LoginHandler {
+	return &LoginHandler{
+		repo:      repo,
+		jwtSecret: cfg.JWTSecret,
+	}
+}
+
+func (h *LoginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		appLogger.Logger.Error("Failed to decode login request", "error", err)
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
 
-	// 2. Найти пользователя в БД по email
-	checkUser, err := userRepo.FindByEmail(req.Email)
+	appLogger.Logger.Info("Login attempt", "email", req.Email)
+
+	user, err := h.repo.FindByEmail(req.Email)
 	if err != nil {
-		http.Error(w, "DataBase error", http.StatusInternalServerError)
-		return
-	}
-	if checkUser == nil {
-		http.Error(w, "User not found", http.StatusUnauthorized)
+		appLogger.Logger.Error("Database error during login", "error", err)
+		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
 
-	// 3. Сравнить пароль с bcrypt.CompareHashAndPassword()
-	err = bcrypt.CompareHashAndPassword([]byte(checkUser.PasswordHash), []byte(req.Password))
-	if err != nil {
-		http.Error(w, "Invalid password", http.StatusUnauthorized)
-	} else {
-		fmt.Printf("Susses password")
+	if user == nil {
+		appLogger.Logger.Warn("User not found", "email", req.Email)
+		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		return
+	}
 
-		//4.Генерация токена
-		claims := jwt.MapClaims{
-			"ID":    checkUser.ID,
-			"Email": checkUser.Email,
-			"exp":   time.Now().Add(time.Hour * 24).Unix(), // Срок действия — 24 часа
-		}
-		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-		signedToken, err := token.SignedString(secretKey)
-		if err != nil {
-			http.Error(w, "Failed to generate token", http.StatusInternalServerError)
-			return
-		}
-		fmt.Println("JWT:", token)
-		response := struct {
-			Token string `json:"token"`
-		}{
-			Token: signedToken,
-		}
-		// Отправляем JSON-ответ клиенту
-		json.NewEncoder(w).Encode(response)
+	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password))
+	if err != nil {
+		appLogger.Logger.Warn("Invalid password", "email", req.Email)
+		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		return
+	}
+
+	claims := jwt.MapClaims{
+		"ID":    user.ID,
+		"Email": user.Email,
+		"exp":   time.Now().Add(time.Hour * 24).Unix(),
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signedToken, err := token.SignedString([]byte(h.jwtSecret))
+	if err != nil {
+		appLogger.Logger.Error("Failed to generate token", "error", err)
+		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		return
+	}
+
+	response := struct {
+		Token string `json:"token"`
+	}{
+		Token: signedToken,
+	}
+
+	json.NewEncoder(w).Encode(response)
+	appLogger.Logger.Info("Login successful", "email", req.Email, "user_id", user.ID)
+}
+
+type StatisticHandler struct {
+	repo repository.UserRepository
+}
+
+func NewStatisticHandler(repo repository.UserRepository) *StatisticHandler {
+	return &StatisticHandler{
+		repo: repo,
 	}
 }
 
-// Статистика по ссылкам с jwt middleware
-func StatisticHandler(w http.ResponseWriter, r *http.Request) {
-	shortCode := chi.URLParam(r, "shortCode") // Получаем короткую из url
-	// поиcк в бд
-	url, err := repo.GetURLByShortCode(shortCode)
+func (h *StatisticHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	shortCode := chi.URLParam(r, "shortCode")
 
-	// JSON
-	if err != nil {
-		http.Error(w, "URL not Found", http.StatusBadRequest)
+	appLogger.Logger.Info("Statistics request", "short_code", shortCode)
+
+	urlRepo, ok := h.repo.(repository.URLRepository)
+	if !ok {
+		appLogger.Logger.Error("Repository does not implement URLRepository")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
+
+	url, err := urlRepo.GetURLByShortCode(shortCode)
+	if err != nil {
+		appLogger.Logger.Warn("URL not found for statistics", "short_code", shortCode, "error", err)
+		http.Error(w, "URL not Found", http.StatusNotFound)
+		return
+	}
+
 	response := struct {
 		ShortCode   string `json:"short_code"`
 		OriginalURL string `json:"original_url"`
@@ -149,6 +191,9 @@ func StatisticHandler(w http.ResponseWriter, r *http.Request) {
 		OriginalURL: url.OriginalURL,
 		ClickCount:  url.ClickCount,
 	}
+
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 
+	appLogger.Logger.Info("Statistics retrieved", "short_code", shortCode)
 }

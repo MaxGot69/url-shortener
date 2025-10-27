@@ -1,8 +1,6 @@
-// Создать базовый сервер на на порту 8080
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 
@@ -13,28 +11,34 @@ import (
 	"github.com/MaxGot69/url-shortener/internal/server"
 	"github.com/MaxGot69/url-shortener/internal/service"
 	"github.com/MaxGot69/url-shortener/pkg/database"
+	appLogger "github.com/MaxGot69/url-shortener/pkg/logger"
 )
 
 func main() {
-	metrics.Init()
 	cfg := config.LoadConfig()
+	
+	appLogger.Init(cfg.LogLevel)
+	appLogger.Logger.Info("Initializing application")
+	
+	metrics.Init()
 
-	db, err := database.PostgresConnection()
+	db, err := database.PostgresConnection(cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName)
 	if err != nil {
+		appLogger.Logger.Error("Failed to connect to database", "error", err)
 		log.Fatal("Failed to connect to database:", err)
 	}
 
-	repo := &repository.PostgresRepository{DB: db}
-	urlService := service.NewURLService(repo) //  создаём сервис
-
-	userRepo := repo
-
-	router := server.NewRouter(urlService, userRepo) // передаём его в NewRouter
-
-	fmt.Println("Starting server on port", cfg.Port)
-	log.Fatal(http.ListenAndServe(":"+cfg.Port, router))
-
-	if err := db.AutoMigrate(&models.URL{}); err != nil {
+	err = db.AutoMigrate(&models.URL{}, &models.User{})
+	if err != nil {
+		appLogger.Logger.Error("Failed to run migrations", "error", err)
 		log.Fatal("Failed to run migrations:", err)
 	}
+
+	repo := &repository.PostgresRepository{DB: db}
+	urlService := service.NewURLService(repo)
+	
+	router := server.NewRouter(urlService, repo, &cfg)
+
+	appLogger.Logger.Info("Starting server", "port", cfg.Port)
+	log.Fatal(http.ListenAndServe(":"+cfg.Port, router))
 }
